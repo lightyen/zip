@@ -11,7 +11,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/alexmullins/zip"
+	"github.com/lightyen/zip"
 )
 
 func ExampleWriter() {
@@ -81,7 +81,8 @@ func ExampleWriter_Encrypt() {
 	// write a password zip
 	raw := new(bytes.Buffer)
 	zipw := zip.NewWriter(raw)
-	w, err := zipw.Encrypt("hello.txt", "golang")
+
+	w, err := zipw.Encrypt(&zip.FileHeader{Name: "hello.txt", Method: zip.Deflate}, "golang")
 	if err != nil {
 		log.Fatal(err)
 	}

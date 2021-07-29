@@ -420,7 +420,7 @@ func (h *FileHeader) writeWinZipExtra() {
 	// total size is 11 bytes
 	var buf [11]byte
 	eb := writeBuf(buf[:])
-	eb.uint16(winzipAesExtraId) // 0x9901
+	eb.uint16(winzipAesExtraID) // 0x9901
 	eb.uint16(7)                // following data size is 7
 	eb.uint16(2)                // ae 2
 	eb.uint16(0x4541)           // "AE"
@@ -452,11 +452,11 @@ type passwordFn func() []byte
 // contents will be encrypted with AES-256 using the given password. The
 // file's contents must be written to the io.Writer before the next call
 // to Create, CreateHeader, or Close.
-func (w *Writer) Encrypt(name string, password string) (io.Writer, error) {
-	fh := &FileHeader{
-		Name:   name,
-		Method: Deflate,
-	}
+func (w *Writer) Encrypt(fh *FileHeader, password string) (io.Writer, error) {
+	// fh := &FileHeader{
+	// 	Name:   name,
+	// 	Method: Deflate,
+	// }
 	fh.SetPassword(password)
 	return w.CreateHeader(fh)
 }

@@ -399,7 +399,7 @@ func TestHeaderTooShort(t *testing.T) {
 	h := FileHeader{
 		Name:   "foo.txt",
 		Method: Deflate,
-		Extra:  []byte{zip64ExtraId}, // missing size
+		Extra:  []byte{zip64ExtraID}, // missing size
 	}
 	testInvalidHeader(&h, t)
 }

@@ -85,7 +85,7 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 	z.File = make([]*File, 0, end.directoryRecords)
 	z.Comment = end.comment
 	rs := io.NewSectionReader(r, 0, size)
-	if _, err = rs.Seek(int64(end.directoryOffset), os.SEEK_SET); err != nil {
+	if _, err = rs.Seek(int64(end.directoryOffset), io.SeekStart); err != nil {
 		return err
 	}
 	buf := bufio.NewReader(rs)
@@ -286,7 +286,7 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 			}
 			eb := readBuf(b[:size])
 			switch tag {
-			case zip64ExtraId:
+			case zip64ExtraID:
 				// update directory values from the zip64 extra block
 				if len(eb) >= 8 {
 					f.UncompressedSize64 = eb.uint64()
@@ -297,7 +297,7 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 				if len(eb) >= 8 {
 					f.headerOffset = int64(eb.uint64())
 				}
-			case winzipAesExtraId:
+			case winzipAesExtraID:
 				// grab the AE version
 				f.ae = eb.uint16()
 				// skip vendor ID

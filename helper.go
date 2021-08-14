@@ -1,25 +1,22 @@
 package zip
 
 import (
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-func Compress(password string, dst io.Writer, ignore []string, assets ...string) error {
-	for i := range ignore {
-		ignore[i] = filepath.Clean(ignore[i])
+type WalkFilesFunc = func(name, path string, d fs.DirEntry) error
+
+func WalkFiles(handler WalkFilesFunc, ignored []string, assets ...string) error {
+	for i := range ignored {
+		ignored[i] = filepath.Clean(ignored[i])
 		var err error
-		ignore[i], err = filepath.Abs(ignore[i])
+		ignored[i], err = filepath.Abs(ignored[i])
 		if err != nil {
 			return err
 		}
 	}
-
-	zw := NewWriter(dst)
-	defer zw.Close()
 
 	type Item struct {
 		IsDir bool
@@ -27,7 +24,7 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 		Info  fs.FileInfo
 	}
 
-	var valid []Item
+	var items []Item
 
 	clean := make(map[string]struct{})
 	for i := range assets {
@@ -43,14 +40,14 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 
 		switch {
 		case info.IsDir():
-			valid = append(valid, Item{IsDir: true, Name: name, Info: info})
+			items = append(items, Item{IsDir: true, Name: name, Info: info})
 			r, err := filepath.Abs(name)
 			if err != nil {
 				return err
 			}
 			dirs = append(dirs, r)
 		case info.Mode().IsRegular():
-			valid = append(valid, Item{IsDir: false, Name: name, Info: info})
+			items = append(items, Item{IsDir: false, Name: name, Info: info})
 			r, err := filepath.Abs(name)
 			if err != nil {
 				return err
@@ -59,7 +56,7 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 		}
 	}
 
-	if len(valid) == 0 {
+	if len(items) == 0 {
 		return nil
 	}
 
@@ -101,88 +98,36 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 
 	root := longestCommonDir(dirs)
 
-	compress := func(name, path, password string, info fs.FileInfo) error {
-		switch {
-		case info.Mode().IsDir():
-			if !strings.HasSuffix(name, "/") {
-				name = name + "/"
-			}
-		case !info.Mode().IsRegular():
-			return nil
-		}
-
-		hdr, err := FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-
-		hdr.Name = name
-		hdr.Method = Deflate
-
-		var w io.Writer
-
-		if password != "" {
-			w, err = zw.Encrypt(hdr, password)
-		} else {
-			w, err = zw.CreateHeader(hdr)
-		}
-
-		if err != nil {
-			return err
-		}
-
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(w, file)
-		return err
-	}
-
-	for i := range valid {
-		if valid[i].IsDir {
-			err := filepath.WalkDir(valid[i].Name, func(path string, d fs.DirEntry, err error) error {
+	for i := range items {
+		if items[i].IsDir {
+			err := filepath.WalkDir(items[i].Name, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err
 				}
 
-				if d.Name() == "." {
+				if !d.Type().IsRegular() {
 					return nil
 				}
 
-				p, err := filepath.Abs(path)
+				abs, err := filepath.Abs(path)
 				if err != nil {
 					return err
 				}
 
-				for i := range ignore {
-					if p == ignore[i] {
+				for i := range ignored {
+					if abs == ignored[i] {
 						return nil
 					}
 				}
 
-				rel, err := filepath.Rel(root, p)
+				rel, err := filepath.Rel(root, abs)
 				if err != nil {
 					return err
-				}
-				if rel == "." {
-					return nil
 				}
 
 				name := filepath.ToSlash(rel)
 
-				info, err := d.Info()
-				if err != nil {
-					return err
-				}
-
-				return compress(name, path, password, info)
+				return handler(name, path, d)
 			})
 
 			if err != nil {
@@ -190,12 +135,12 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 			}
 		} else {
 			do := func(path string) error {
-				a, err := filepath.Abs(path)
+				abs, err := filepath.Abs(path)
 				if err != nil {
 					return err
 				}
 
-				rel, err := filepath.Rel(root, a)
+				rel, err := filepath.Rel(root, abs)
 				if err != nil {
 					return err
 				}
@@ -207,11 +152,10 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 					return err
 				}
 
-				return compress(name, path, password, info)
+				return handler(name, path, &statDirEntry{info})
 			}
 
-			err := do(valid[i].Name)
-			if err != nil {
+			if err := do(items[i].Name); err != nil && err != fs.SkipDir {
 				return err
 			}
 		}
@@ -219,3 +163,12 @@ func Compress(password string, dst io.Writer, ignore []string, assets ...string)
 
 	return nil
 }
+
+type statDirEntry struct {
+	info fs.FileInfo
+}
+
+func (d *statDirEntry) Name() string               { return d.info.Name() }
+func (d *statDirEntry) IsDir() bool                { return d.info.IsDir() }
+func (d *statDirEntry) Type() fs.FileMode          { return d.info.Mode().Type() }
+func (d *statDirEntry) Info() (fs.FileInfo, error) { return d.info, nil }

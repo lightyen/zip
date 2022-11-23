@@ -82,7 +82,7 @@ func ExampleWriter_Encrypt() {
 	raw := new(bytes.Buffer)
 	zipw := zip.NewWriter(raw)
 
-	w, err := zipw.Encrypt(&zip.FileHeader{Name: "hello.txt", Method: zip.Deflate}, "golang")
+	w, err := zipw.Encrypt(&zip.FileHeader{Name: "hello.txt", Method: zip.Deflate}, []byte("golang"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func ExampleWriter_Encrypt() {
 		log.Fatal(err)
 	}
 	for _, z := range zipr.File {
-		z.SetPassword("golang")
+		z.SetPassword([]byte("golang"))
 		rr, err := z.Open()
 		if err != nil {
 			log.Fatal(err)

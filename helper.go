@@ -8,16 +8,7 @@ import (
 
 type WalkFilesFunc = func(name, path string, d fs.DirEntry) error
 
-func WalkFiles(handler WalkFilesFunc, ignored []string, assets ...string) error {
-	for i := range ignored {
-		ignored[i] = filepath.Clean(ignored[i])
-		var err error
-		ignored[i], err = filepath.Abs(ignored[i])
-		if err != nil {
-			return err
-		}
-	}
-
+func WalkFiles(handler WalkFilesFunc, assets ...string) error {
 	type Item struct {
 		IsDir bool
 		Name  string
@@ -112,12 +103,6 @@ func WalkFiles(handler WalkFilesFunc, ignored []string, assets ...string) error 
 				abs, err := filepath.Abs(path)
 				if err != nil {
 					return err
-				}
-
-				for i := range ignored {
-					if abs == ignored[i] {
-						return nil
-					}
 				}
 
 				rel, err := filepath.Rel(root, abs)

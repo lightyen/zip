@@ -10,19 +10,23 @@ import (
 
 func TestCompress(t *testing.T) {
 	output := "output.zip"
-	ignored, err := filepath.Glob(output)
+	password := []byte("golang")
+	assets := []string{"./LICENSE", "README.md", "testdata"}
+
+	f, err := os.Create(output)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
 
-	password := "golang"
-	assets := []string{"./LICENSE", "README.md", "testdata"}
-
-	f, _ := os.Create(output)
 	zw := NewWriter(f)
 	defer zw.Close()
 
 	err = WalkFiles(func(name, path string, d fs.DirEntry) error {
+		if path == output {
+			return nil
+		}
+
 		info, err := d.Info()
 		if err != nil {
 			return err
@@ -36,11 +40,19 @@ func TestCompress(t *testing.T) {
 		hdr.Name = name
 		hdr.Method = Deflate
 
-		var w io.Writer
+		ignored := "*/symlink.zip"
+		matched, err := filepath.Match(ignored, name)
+		if err != nil {
+			return err
+		}
 
-		if password != "" {
-			w, err = zw.Encrypt(hdr, password)
-		} else {
+		var w io.Writer
+		switch {
+		case matched:
+			w, err = zw.CreateHeader(hdr)
+		case len(password) > 0:
+			w, err = zw.Encrypt(hdr, []byte(password))
+		default:
 			w, err = zw.CreateHeader(hdr)
 		}
 
@@ -48,18 +60,15 @@ func TestCompress(t *testing.T) {
 			return err
 		}
 
-		file, err := os.Open(path)
+		f, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer f.Close()
 
-		n, err := io.Copy(w, file)
-		if err == nil {
-			t.Logf("Size of %v: %v byte(s)\n", path, n)
-		}
+		_, err = io.Copy(w, f)
 		return err
-	}, ignored, assets...)
+	}, assets...)
 
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +76,7 @@ func TestCompress(t *testing.T) {
 }
 
 func TestExtract(t *testing.T) {
+	password := []byte("golang")
 	r, err := OpenReader("output.zip")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +90,7 @@ func TestExtract(t *testing.T) {
 
 	write := func(outputDir string, fi *File) (int64, error) {
 		if fi.IsEncrypted() {
-			fi.SetPassword("golang")
+			fi.SetPassword(password)
 		}
 
 		r, err := fi.Open()

@@ -8,12 +8,13 @@ import (
 	"testing"
 )
 
-func TestCompress(t *testing.T) {
+func TestHelper(t *testing.T) {
 	output := "output.zip"
 	password := []byte("golang")
+	tmp := t.TempDir()
 	assets := []string{"./LICENSE", "README.md", "testdata"}
-
-	f, err := os.Create(output)
+	filename := filepath.Join(tmp, output)
+	f, err := os.Create(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,17 +74,9 @@ func TestCompress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
+	zw.Close()
 
-func TestExtract(t *testing.T) {
-	password := []byte("golang")
-	r, err := OpenReader("output.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-
-	outputDir := "output"
+	outputDir := filepath.Join(tmp, "output")
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +106,12 @@ func TestExtract(t *testing.T) {
 		return io.Copy(f, r)
 	}
 
+	r, err := OpenReader(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
 	for _, fi := range r.File {
 		n, err := write(outputDir, fi)
 		if err != nil {
@@ -122,7 +121,7 @@ func TestExtract(t *testing.T) {
 			}
 			t.Fatal(err)
 		}
-
 		t.Logf("Size of %v: %v byte(s)\n", filepath.Join(outputDir, fi.Name), n)
 	}
+
 }

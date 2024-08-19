@@ -435,6 +435,9 @@ func (h *FileHeader) setEncryptionBit() {
 
 // SetPassword sets the password used for encryption/decryption.
 func (h *FileHeader) SetPassword(password []byte) {
+	if len(password) == 0 {
+		return
+	}
 	if !h.IsEncrypted() {
 		h.setEncryptionBit()
 	}
